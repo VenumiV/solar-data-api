@@ -28,7 +28,7 @@ async function seed() {
     // Create historical energy generation records from Aug 1, 2025 8pm to Oct 18, 2025 6pm (Sri Lanka time) every 2 hours
     const records = [];
     const startDate = new Date("2025-08-01T08:00:00Z")// August 1, 2025 8pm UTC
-    const endDate = new Date("2025-12-08T12:30:00Z")// October 18, 2025 12:30pm UTC (6:00pm Sri Lanka time)
+    const endDate = new Date("2025-12-16T12:30:00Z")// October 18, 2025 12:30pm UTC (6:00pm Sri Lanka time)
 
     let currentDate = new Date(startDate);
     let recordCount = 0;
@@ -37,6 +37,8 @@ async function seed() {
       // Generate realistic energy values based on time of day and season
       const hour = currentDate.getUTCHours();
       const month = currentDate.getUTCMonth(); // 0-11
+      const date = new Date(currentDate);
+      const currentDayOfYear = Math.floor((date.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
       // Base energy generation (higher in summer months)
       let baseEnergy = 200;
@@ -68,30 +70,64 @@ async function seed() {
         timeMultiplier = 0; // Minimal generation at night
       }
 
-    
-    // Add some random variation (±20%)
-    const variation = 0.8 + Math.random() * 0.4;
-    const energyGenerated = Math.round(
-      baseEnergy * timeMultiplier * variation
-    );
+      let energyGenerated = 0;
 
-    records.push({
-      serialNumber: serialNumber,
-      timestamp: new Date(currentDate),
-      energyGenerated: energyGenerated,
-    });
+      // ANOMALY PATTERNS - Inject specific anomaly types
+      
+      // 1. MECHANICAL ANOMALY: Days 10-12 (complete failure)
+      if (currentDayOfYear >= 10 && currentDayOfYear <= 12) {
+        energyGenerated = 0; // Complete failure
+      }
+      // 2. TEMPERATURE ANOMALY: Days 20-26 (consistent underperformance)
+      else if (currentDayOfYear >= 20 && currentDayOfYear <= 26) {
+        // Reduce to 40% of normal (temperature efficiency loss)
+        const variation = 0.8 + Math.random() * 0.4;
+        energyGenerated = Math.round(baseEnergy * timeMultiplier * variation * 0.4);
+      }
+      // 3. SHADING ANOMALY: Days 35-40 (partial obstruction)
+      else if (currentDayOfYear >= 35 && currentDayOfYear <= 40) {
+        // Reduce to 65% of normal (partial shading)
+        const variation = 0.8 + Math.random() * 0.4;
+        energyGenerated = Math.round(baseEnergy * timeMultiplier * variation * 0.65);
+      }
+      // 4. SENSOR_ERROR ANOMALY: Day 50 (impossible negative value)
+      else if (currentDayOfYear === 50 && hour === 12) {
+        energyGenerated = -5; // Invalid negative reading
+      }
+      // 5. SENSOR_ERROR ANOMALY: Day 55 (impossible high value)
+      else if (currentDayOfYear === 55 && hour === 12) {
+        energyGenerated = 10000; // Impossible high value
+      }
+      // 6. BELOW_AVERAGE: Day 60 (significant drop)
+      else if (currentDayOfYear === 60) {
+        // 50% below normal
+        const variation = 0.8 + Math.random() * 0.4;
+        energyGenerated = Math.round(baseEnergy * timeMultiplier * variation * 0.5);
+      }
+      // NORMAL OPERATION
+      else {
+        // Add some random variation (±20%)
+        const variation = 0.8 + Math.random() * 0.4;
+        energyGenerated = Math.round(baseEnergy * timeMultiplier * variation);
+      }
 
-    // Move to next 2-hour interval
-    currentDate = new Date(currentDate.getTime() + 2 * 60 * 60 * 1000);
-    recordCount++;
-  }
+      records.push({
+        serialNumber: serialNumber,
+        timestamp: new Date(currentDate),
+        energyGenerated: energyGenerated,
+      });
+
+      // Move to next 2-hour interval
+      currentDate = new Date(currentDate.getTime() + 2 * 60 * 60 * 1000);
+      recordCount++;
+    }
 
 
     await EnergyGenerationRecord.insertMany(records);
 
 
     console.log(
-      `Database seeded successfully. Generated ${recordCount} energy generation records from August 1, 2025 8pm to December 08, 2025 6pm (Sri Lanka time).`
+      `Database seeded successfully. Generated ${recordCount} energy generation records from August 1, 2025 8pm to December 14, 2025 6pm (Sri Lanka time).`
     );
   } catch (err) {
     console.error("Seeding error:", err);
