@@ -1,5 +1,5 @@
 {
-  "name": "fs_back_end",
+  "name": "fs_data_api",
   "version": "1.0.0",
   "main": "src/index.ts",
   "scripts": {
