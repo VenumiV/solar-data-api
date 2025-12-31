@@ -20,7 +20,7 @@ async function seed() {
     // Create historical energy generation records from Aug 1, 2025 8pm to Dec 28, 2025 12:30pm (Sri Lanka time) every 2 hours
     const records = [];
     const startDate = new Date("2025-08-01T08:00:00Z"); // August 1, 2025 8pm UTC
-    const endDate = new Date("2025-12-30T12:30:00Z"); // Dec 28, 2025 12:30pm UTC
+    const endDate = new Date("2025-12-31T12:30:00Z"); // Dec 28, 2025 12:30pm UTC
 
     let currentDate = new Date(startDate);
     let recordCount = 0;
@@ -120,12 +120,12 @@ async function seed() {
         energyGenerated = Math.round(baseEnergy * timeMultiplier * variation * reductionFactor);
       }
       // 8. BELOW AVERAGE PERIOD 3: Nov 15-19 (Days 106-110) - 5 days = ~5 anomalies
-      else if (daysSinceStart >= 106 && daysSinceStart <= 110) {
+      /*else if (daysSinceStart >= 106 && daysSinceStart <= 110) {
         // Reduced energy (35-45% of normal)
         const reductionFactor = 0.35 + Math.random() * 0.1; // 35-45% of normal
         const variation = 0.8 + Math.random() * 0.4;
         energyGenerated = Math.round(baseEnergy * timeMultiplier * variation * reductionFactor);
-      }
+      }*/
       // NORMAL OPERATION - All other periods
       else {
         // Normal operation with typical daily variation (±20%)
@@ -147,7 +147,7 @@ async function seed() {
     await EnergyGenerationRecord.insertMany(records);
 
     console.log(
-      `Database seeded successfully. Generated ${recordCount} energy generation records from August 1, 2025 to December 28, 2025.`
+      `Database seeded successfully. Generated ${recordCount} energy generation records from August 1, 2025 to December 31, 2025.`
     );
     console.log("\nAnomaly Periods (Expected ~30 anomalies):");
     console.log("- Aug 5-7 (3 days): Mechanical Failure (0 kWh) → ~3 anomalies");
