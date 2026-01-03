@@ -5,161 +5,175 @@ import { connectDB } from "./db";
 
 dotenv.config();
 
-async function seed() {
-  const serialNumber = "SU-0001";
+// Define anomaly periods for each unit
+const unitAnomalyConfigs = {
+  "SU-0001": [
+    { start: 4, end: 6, type: "mechanical" }, // Aug 5-7
+   // { start: 9, end: 13, type: "sensor1" }, // Aug 10-14
+    //{ start: 19, end: 23, type: "belowAvg1" }, // Aug 20-24
+    { start: 29, end: 33, type: "temperature" }, // Aug 30 - Sep 3
+    { start: 40, end: 44, type: "shading" }, // Sep 10-14
+    { start: 50, end: 54, type: "sensor2" }, // Sep 20-24
+    //{ start: 65, end: 69, type: "belowAvg2" }, // Oct 5-9
+  ],
+  "SU-0002": [
+    { start: 15, end: 17, type: "mechanical" }, // Aug 16-18
+    { start: 25, end: 29, type: "sensor1" }, // Aug 26-30
+    //{ start: 35, end: 39, type: "belowAvg1" }, // Sep 5-9
+    { start: 48, end: 52, type: "temperature" }, // Sep 18-22
+    { start: 60, end: 64, type: "shading" }, // Oct 1-5
+   // { start: 75, end: 79, type: "sensor2" }, // Oct 16-20
+    //{ start: 90, end: 94, type: "belowAvg2" }, // Nov 1-5
+  ],
+  "SU-0003": [
+    { start: 8, end: 10, type: "mechanical" }, // Aug 9-11
+    //{ start: 20, end: 24, type: "sensor1" }, // Aug 21-25
+   // { start: 32, end: 36, type: "belowAvg1" }, // Sep 2-6
+    { start: 45, end: 49, type: "temperature" }, // Sep 15-19
+    { start: 58, end: 62, type: "shading" }, // Sep 29 - Oct 3
+    { start: 70, end: 74, type: "sensor2" }, // Oct 11-15
+   // { start: 95, end: 99, type: "belowAvg2" }, // Nov 6-10
+  ],
+};
 
-  try {
-    // Connect to DB
-    await connectDB();
+function getEnergyForAnomaly(
+  anomalyType: string,
+  baseEnergy: number,
+  timeMultiplier: number
+): number {
+  const variation = 0.8 + Math.random() * 0.4;
 
-    // Clear existing data - DELETE ALL RECORDS
-    console.log("Clearing all existing energy generation records...");
-    const deleteResult = await EnergyGenerationRecord.deleteMany({});
-    console.log(`Deleted ${deleteResult.deletedCount} existing records.`);
+  switch (anomalyType) {
+    case "mechanical":
+      return 0; // Complete failure
 
-    // Create historical energy generation records from Aug 1, 2025 8pm to Dec 28, 2025 12:30pm (Sri Lanka time) every 2 hours
-    const records = [];
-    const startDate = new Date("2025-08-01T08:00:00Z"); // August 1, 2025 8pm UTC
-    const endDate = new Date("2025-12-31T12:30:00Z"); // Dec 28, 2025 12:30pm UTC
+    case "sensor1":
+      // Random negative or extreme high values
+      return Math.random() < 0.5
+        ? -(0.5 + Math.random() * 2) // Negative: -0.5 to -2.5 kWh
+        : 50 + Math.random() * 100; // High: 50-150 kWh
 
-    let currentDate = new Date(startDate);
-    let recordCount = 0;
+    case "sensor2":
+      // Different sensor error pattern
+      return Math.random() < 0.6
+        ? -(1 + Math.random() * 2) // Negative: -1 to -3 kWh
+        : 80 + Math.random() * 120; // Extreme: 80-200 kWh
 
-    while (currentDate <= endDate) {
-      // Generate realistic energy values based on time of day and season
-      const hour = currentDate.getUTCHours();
-      const month = currentDate.getUTCMonth(); // 0-11
+    /*case "belowAvg1":
+      // 30-50% of normal
+      const reduction1 = 0.3 + Math.random() * 0.2;
+      return Math.round(baseEnergy * timeMultiplier * variation * reduction1 * 100) / 100;
 
-      // Calculate days since start (Aug 1 = day 0)
-      const daysSinceStart = Math.floor(
-        (currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
+    case "belowAvg2":
+      // 40-60% of normal
+      const reduction2 = 0.4 + Math.random() * 0.2;
+      return Math.round(baseEnergy * timeMultiplier * variation * reduction2 * 100) / 100;
+*/
+    case "temperature":
+      // 40% efficiency due to high temperature
+      return Math.round(baseEnergy * timeMultiplier * variation * 0.4 * 100) / 100;
 
-      // Base energy generation (higher in summer months)
-      let baseEnergy = 200;
-      if (month >= 5 && month <= 7) {
-        // June-August (summer)
-        baseEnergy = 300;
-      } else if (month >= 2 && month <= 4) {
-        // March-May (spring)
-        baseEnergy = 250;
-      } else if (month >= 8 && month <= 10) {
-        // September-November (fall)
-        baseEnergy = 200;
-      } else {
-        // December-February (winter)
-        baseEnergy = 150;
-      }
+    case "shading":
+      // 65% efficiency due to shading
+      return Math.round(baseEnergy * timeMultiplier * variation * 0.65 * 100) / 100;
 
-      // Adjust based on time of day (solar panels generate more during daylight)
-      let timeMultiplier = 1;
-      if (hour >= 6 && hour <= 18) {
-        // Daylight hours
-        timeMultiplier = 1.2;
-        if (hour >= 10 && hour <= 14) {
-          // Peak sun hours
-          timeMultiplier = 1.5;
-        }
-      } else {
-        // Night hours
-        timeMultiplier = 0; // Minimal generation at night
-      }
+    default:
+      return Math.round(baseEnergy * timeMultiplier * variation * 100) / 100;
+  }
+}
 
-      let energyGenerated = 0;
+async function seedUnit(serialNumber: string, anomalies: any[]) {
+  const records = [];
+  const startDate = new Date("2025-08-01T08:00:00Z");
+  const endDate = new Date("2026-01-03T12:30:00Z");
 
-      // CONTINUOUS ANOMALY PATTERNS - Optimized to generate ~30 anomalies
-      // Each anomaly type affects ALL 2-hour records within the specified date range
-      // Shorter periods (3-5 days) to reduce total anomaly count
+  let currentDate = new Date(startDate);
+  let recordCount = 0;
 
-      // 1. MECHANICAL FAILURE: Aug 5-7 (Days 4-6) - 3 days = ~3 anomalies
-      if (daysSinceStart >= 4 && daysSinceStart <= 6) {
-        energyGenerated = 0; // No energy generation at all
-      }
-      // 2. SENSOR ERROR PERIOD 1: Aug 10-14 (Days 9-13) - 5 days = ~5 anomalies
-      else if (daysSinceStart >= 9 && daysSinceStart <= 13) {
-        // Sensor errors produce impossible values throughout this period
-        if (Math.random() < 0.5) {
-          energyGenerated = -Math.round(5 + Math.random() * 20); // Negative readings (-5 to -25 kWh)
-        } else {
-          energyGenerated = Math.round(5000 + Math.random() * 5000); // Impossible high values (5000-10000 kWh)
-        }
-      }
-      // 3. BELOW AVERAGE PERIOD 1: Aug 20-24 (Days 19-23) - 5 days = ~5 anomalies
-      else if (daysSinceStart >= 19 && daysSinceStart <= 23) {
-        // Consistently reduced energy (30-50% of normal) due to panel obstruction
-        const reductionFactor = 0.3 + Math.random() * 0.2; // 30-50% of normal
-        const variation = 0.8 + Math.random() * 0.4; // Normal daily variation
-        energyGenerated = Math.round(baseEnergy * timeMultiplier * variation * reductionFactor);
-      }
-      // 4. TEMPERATURE ANOMALY: Aug 30 - Sep 3 (Days 29-33) - 5 days = ~1 anomaly (grouped)
-      else if (daysSinceStart >= 29 && daysSinceStart <= 33) {
-        // High temperatures reduce efficiency to 40% of normal
-        const variation = 0.8 + Math.random() * 0.4;
-        energyGenerated = Math.round(baseEnergy * timeMultiplier * variation * 0.4);
-      }
-      // 5. SHADING ANOMALY: Sep 10-14 (Days 40-44) - 5 days = ~1 anomaly (grouped)
-      else if (daysSinceStart >= 40 && daysSinceStart <= 44) {
-        // Shading reduces output to 65% of normal
-        const variation = 0.8 + Math.random() * 0.4;
-        energyGenerated = Math.round(baseEnergy * timeMultiplier * variation * 0.65);
-      }
-      // 6. SENSOR ERROR PERIOD 2: Sep 20-24 (Days 50-54) - 5 days = ~5 anomalies
-      else if (daysSinceStart >= 50 && daysSinceStart <= 56) {
-        // Different pattern of sensor errors
-        if (Math.random() < 0.6) {
-          energyGenerated = -Math.round(10 + Math.random() * 10); // Negative readings (-10 to -25 kWh)
-        } else {
-          energyGenerated = Math.round(8000 + Math.random() * 40000); // Extreme values (8000-12000 kWh)
-        }
-      }
-      // 7. BELOW AVERAGE PERIOD 2: Oct 5-9 (Days 65-69) - 5 days = ~5 anomalies
-      else if (daysSinceStart >= 65 && daysSinceStart <= 69) {
-        // Reduced energy (40-60% of normal) throughout the period
-        const reductionFactor = 0.4 + Math.random() * 0.2; // 40-60% of normal
-        const variation = 0.8 + Math.random() * 0.4;
-        energyGenerated = Math.round(baseEnergy * timeMultiplier * variation * reductionFactor);
-      }
-      // 8. BELOW AVERAGE PERIOD 3: Nov 15-19 (Days 106-110) - 5 days = ~5 anomalies
-      /*else if (daysSinceStart >= 106 && daysSinceStart <= 110) {
-        // Reduced energy (35-45% of normal)
-        const reductionFactor = 0.35 + Math.random() * 0.1; // 35-45% of normal
-        const variation = 0.8 + Math.random() * 0.4;
-        energyGenerated = Math.round(baseEnergy * timeMultiplier * variation * reductionFactor);
-      }*/
-      // NORMAL OPERATION - All other periods
-      else {
-        // Normal operation with typical daily variation (±20%)
-        const variation = 0.8 + Math.random() * 0.4;
-        energyGenerated = Math.round(baseEnergy * timeMultiplier * variation);
-      }
+  while (currentDate <= endDate) {
+    const hour = currentDate.getUTCHours();
+    const month = currentDate.getUTCMonth();
 
-      records.push({
-        serialNumber: serialNumber,
-        timestamp: new Date(currentDate),
-        energyGenerated: energyGenerated,
-      });
+    const daysSinceStart = Math.floor(
+      (currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
 
-      // Move to next 2-hour interval
-      currentDate = new Date(currentDate.getTime() + 2 * 60 * 60 * 1000);
-      recordCount++;
+    // Base energy calculation
+    let baseEnergy = 1.2;
+    if (month >= 5 && month <= 7) {
+      baseEnergy = 1.5;
+    } else if (month >= 2 && month <= 4) {
+      baseEnergy = 1.4;
+    } else if (month >= 8 && month <= 10) {
+      baseEnergy = 1.2;
+    } else {
+      baseEnergy = 1.0;
     }
 
-    await EnergyGenerationRecord.insertMany(records);
+    // Time of day multiplier
+    let timeMultiplier = 1;
+    if (hour >= 6 && hour <= 18) {
+      timeMultiplier = 1.2;
+      if (hour >= 10 && hour <= 14) {
+        timeMultiplier = 1.5;
+      }
+    } else {
+      timeMultiplier = 0;
+    }
 
-    console.log(
-      `Database seeded successfully. Generated ${recordCount} energy generation records from August 1, 2025 to December 31, 2025.`
-    );
-    console.log("\nAnomaly Periods (Expected ~30 anomalies):");
-    console.log("- Aug 5-7 (3 days): Mechanical Failure (0 kWh) → ~3 anomalies");
-    console.log("- Aug 10-14 (5 days): Sensor Error Period 1 (negative/extreme values) → ~5 anomalies");
-    console.log("- Aug 20-24 (5 days): Below Average Period 1 (30-50% normal) → ~5 anomalies");
-    console.log("- Aug 30 - Sep 3 (5 days): Temperature Anomaly (40% normal) → ~1 anomaly");
-    console.log("- Sep 10-14 (5 days): Shading Anomaly (65% normal) → ~1 anomaly");
-    console.log("- Sep 20-24 (5 days): Sensor Error Period 2 (negative/extreme values) → ~5 anomalies");
-    console.log("- Oct 5-9 (5 days): Below Average Period 2 (40-60% normal) → ~5 anomalies");
-    console.log("- Nov 15-19 (5 days): Below Average Period 3 (35-45% normal) → ~5 anomalies");
-    console.log("\nTotal: ~30 anomalies across 8 distinct periods");
-    console.log("All other dates have NORMAL operation.");
+    // Check if current day falls in any anomaly period
+    let energyGenerated = 0;
+    let isAnomaly = false;
+
+    for (const anomaly of anomalies) {
+      if (daysSinceStart >= anomaly.start && daysSinceStart <= anomaly.end) {
+        energyGenerated = getEnergyForAnomaly(anomaly.type, baseEnergy, timeMultiplier);
+        isAnomaly = true;
+        break;
+      }
+    }
+
+    // Normal operation
+    if (!isAnomaly) {
+      const variation = 0.8 + Math.random() * 0.4;
+      energyGenerated = Math.round(baseEnergy * timeMultiplier * variation * 100) / 100;
+    }
+
+    records.push({
+      serialNumber: serialNumber,
+      timestamp: new Date(currentDate),
+      energyGenerated: energyGenerated,
+    });
+
+    currentDate = new Date(currentDate.getTime() + 2 * 60 * 60 * 1000);
+    recordCount++;
+  }
+
+  await EnergyGenerationRecord.insertMany(records);
+  console.log(`✓ Seeded ${recordCount} records for ${serialNumber}`);
+}
+
+async function seed() {
+  try {
+    await connectDB();
+
+    // Clear all existing data
+    console.log("Clearing all existing energy generation records...");
+    const deleteResult = await EnergyGenerationRecord.deleteMany({});
+    console.log(`Deleted ${deleteResult.deletedCount} existing records.\n`);
+
+    // Seed each unit
+    for (const [serialNumber, anomalies] of Object.entries(unitAnomalyConfigs)) {
+      console.log(`Seeding ${serialNumber}...`);
+      await seedUnit(serialNumber, anomalies);
+    }
+
+    console.log("\n=== SEEDING COMPLETE ===");
+    console.log("Generated records for SU-0001, SU-0002, and SU-0003");
+    console.log("Period: August 1, 2025 to December 31, 2025");
+    console.log("Interval: Every 2 hours");
+    console.log("\nEach unit has different anomaly periods to simulate varied real-world conditions.");
+
   } catch (err) {
     console.error("Seeding error:", err);
   } finally {
