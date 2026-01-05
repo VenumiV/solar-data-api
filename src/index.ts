@@ -15,7 +15,16 @@ import { clerkMiddleware } from "@clerk/express";
 
 const server = express();
 server.use(express.json());
-server.use(cors({ origin: "http://localhost:5173" }));
+server.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://fed-front-end-venumi.netlify.app",
+    ],
+    credentials: true,
+  })
+);
+
 
 server.use(loggerMiddleware);
 
