@@ -85,7 +85,7 @@ function getEnergyForAnomaly(
 async function seedUnit(serialNumber: string, anomalies: any[]) {
   const records = [];
   const startDate = new Date("2025-08-01T08:00:00Z");
-  const endDate = new Date("2026-01-03T12:30:00Z");
+  const endDate = new Date("2026-01-21T12:30:00Z");
 
   let currentDate = new Date(startDate);
   let recordCount = 0;
