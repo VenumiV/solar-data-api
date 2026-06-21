@@ -85,7 +85,7 @@ function getEnergyForAnomaly(
 async function seedUnit(serialNumber: string, anomalies: any[]) {
   const records = [];
   const startDate = new Date("2025-08-01T08:00:00Z");
-  const endDate = new Date("2026-01-21T12:30:00Z");
+  const endDate = new Date("2026-06-20T12:30:00Z");
 
   let currentDate = new Date(startDate);
   let recordCount = 0;
@@ -170,7 +170,7 @@ async function seed() {
 
     console.log("\n=== SEEDING COMPLETE ===");
     console.log("Generated records for SU-0001, SU-0002, and SU-0003");
-    console.log("Period: August 1, 2025 to December 31, 2025");
+    console.log("Period: August 1, 2025 to June 20, 2026");
     console.log("Interval: Every 2 hours");
     console.log("\nEach unit has different anomaly periods to simulate varied real-world conditions.");
 
